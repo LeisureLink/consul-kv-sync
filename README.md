@@ -1,6 +1,6 @@
 # consul-kv-sync
 
-Synchronizes a json document with key-value pairs in Consul.
+Synchronizes a json document with key-value pairs in Consul. Will add, update, and *delete* keys as necessary.
 
 Usage:
 
