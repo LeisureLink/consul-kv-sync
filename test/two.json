@@ -1,0 +1,7 @@
+{
+  "service": {
+    "one": "value from file two",
+    "three": "value 3",
+    "arrayparam": [1,2,3,4]
+  }
+}
