@@ -1,5 +1,5 @@
 {
-  "name": "@leisurelink/consul-kv-sync",
+  "name": "consul-kv-sync",
   "version": "0.1.0",
   "description": "Command line interface that synchronizes a set of key-value pairs to consul.",
   "main": "consul-kv-sync",
