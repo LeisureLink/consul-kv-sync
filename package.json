@@ -1,0 +1,42 @@
+{
+  "name": "@leisurelink/consul-kv-sync",
+  "version": "0.1.0",
+  "description": "Command line interface that synchronizes a set of key-value pairs to consul.",
+  "main": "consul-kv-sync",
+  "preferGlobal": true,
+  "bin": {
+    "consul-kv-sync": "consul-kv-sync.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/LeisureLink/consul-kv-sync.git"
+  },
+  "author": "Jesse Hansen <jhansen@leisurelink.com>",
+  "contributors": [
+    {
+      "name": "Jesse Hansen",
+      "email": "jhansen@leisurelink.com"
+    }
+  ],
+  "scripts": {
+    "test": "mocha test"
+  },
+  "dependencies": {
+    "assert-plus": "^0.1.5",
+    "bluebird": "^3.0.5",
+    "lodash": "^3.10.1",
+    "request": "^2.65.0"
+  },
+  "config": {
+    "title": "Consul KV Sync",
+    "docker": {
+      "build_machine": "leisurelink/alpine-node-build-machine:4-latest"
+    }
+  },
+  "devDependencies": {
+    "chai": "^3.3.0",
+    "istanbul": "^0.4.0",
+    "mocha": "^2.2.5",
+    "onchange": "^2.0.0"
+  }
+}
