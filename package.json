@@ -1,6 +1,6 @@
 {
   "name": "consul-kv-sync",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Command line interface that synchronizes a set of key-value pairs to consul.",
   "main": "consul-kv-sync",
   "preferGlobal": true,
