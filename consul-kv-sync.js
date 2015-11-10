@@ -91,7 +91,7 @@ Promise.all(_.map(program.ca, readFile)).then(function(certificates) {
   return Promise.all(_.map(program.args, readFragments));
 }).then(function(files) {
   _flattened = _.flatten(files);
-  var prefix = _flattened[1].fragmentId.substring(2);
+  var prefix = _flattened[1].fragmentId.substring(2) + '/';
 
   debug('Getting keys for ' + prefix);
   return _client.kv.keysAsync(prefix);

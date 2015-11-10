@@ -20,13 +20,19 @@ describe('consul-kv-sync', function() {
       return _client.kv.setAsync({
         key:'service/four',
         value: 'value for removal'
-      }).then(function() {
+      }).then(function(){
+        return _client.kv.setAsync({
+          key: 'service2/item',
+          value: 'this value should stay'
+        })
+      })
+      .then(function() {
         var proc = exec('node ../consul-kv-sync.js ./one.json ./two.json', {
           cwd: __dirname
         });
         proc.on('exit', function() {
           _client.kv.getAsync({
-            key:'service/',
+            key:'service',
             recurse: true
           }).then(function(result) {
             response = result;
@@ -67,12 +73,20 @@ describe('consul-kv-sync', function() {
       expect(items[3].Value).to.eql('4');
     });
 
-    it('should set remove existing keys that are not in config file', function() {
+    it('should remove existing keys that are not in config file', function() {
       var items = _.filter(response, function(item) {
-        return item.key == 'service/four';
+        return item.Key == 'service/four';
       });
 
       expect(items.length).to.eql(0);
+    });
+
+    it('should not impact keys for a different service', function() {
+      return _client.kv.getAsync({
+        key: 'service2/item'
+      }).then(function(item){
+        expect(item.Value).to.eql('this value should stay');
+      });
     });
 
   });
