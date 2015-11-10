@@ -26,6 +26,16 @@ describe('consul-kv-sync', function() {
   var _exitCode;
   Promise.promisifyAll(_client.kv);
 
+  after(function(){
+    return _client.kv.delAsync({key:'service', recurse:true})
+      .then(function(){
+        return _client.kv.delAsync({key:'service2', recurse:true});
+      })
+      .then(function(){
+        return _client.kv.delAsync({key:'other_service', recurse:true});
+      });
+  });
+
   describe('#validation', function() {
     it('should return an error when an empty config file is added', function() {
       return execute('node ../consul-kv-sync.js ./one.json ./two.json ./empty.json')
@@ -49,79 +59,136 @@ describe('consul-kv-sync', function() {
 
   describe('#run', function() {
     var _response;
-    before(function() {
-      return _client.kv.setAsync({
-        key: 'service/four',
-        value: 'value for removal'
-      }).then(function() {
+    describe('first run scenario', function(){
+      before(function(){
+        return _client.kv.delAsync({key:'service', recurse:true})
+          .then(function(){
+            return execute('node ../consul-kv-sync.js ./one.json ./two.json');
+          }).then(function(exitCode){
+            _exitCode = exitCode;
+            return _client.kv.getAsync({
+              key: 'service',
+              recurse: true
+            });
+          }).then(function(response){
+            _response = response;
+          });
+      });
+
+      it('should set exit code to 0', function() {
+        expect(_exitCode).to.eql(0);
+      });
+
+      it('should set value to correct value', function() {
+        var item = _response.find(function(item) {
+          return item.Key == 'service/two';
+        });
+
+        expect(item).to.be.ok;
+        expect(item.Value).to.eql('value 2');
+      });
+
+      it('should set overridden value to correct value', function() {
+        var item = _response.find(function(item) {
+          return item.Key == 'service/one';
+        });
+
+        expect(item).to.be.ok;
+        expect(item.Value).to.eql('value from file two');
+      });
+
+      it('should set array parameters correctly', function() {
+        var items = _.filter(_response, function(item) {
+          return /^service\/arrayparam/.test(item.Key);
+        });
+
+        expect(items.length).to.eql(4);
+        expect(items[0].Key).to.eql('service/arrayparam/0');
+        expect(items[0].Value).to.eql('1');
+        expect(items[1].Value).to.eql('2');
+        expect(items[2].Value).to.eql('3');
+        expect(items[3].Value).to.eql('4');
+      });
+    });
+
+    describe('second run scenario', function(){
+      before(function() {
         return _client.kv.setAsync({
-          key: 'service2/item',
-          value: 'this value should stay'
+          key: 'service/four',
+          value: 'value for removal'
+        }).then(function() {
+          return _client.kv.setAsync({
+            key: 'service2/item',
+            value: 'this value should stay'
+          });
+        }).then(function() {
+          return _client.kv.setAsync({
+            key: 'service/one',
+            value: 'this value should be changed'
+          });
+        }).then(function() {
+          return execute('node ../consul-kv-sync.js ./one.json ./two.json');
+        }).then(function(exitCode) {
+          _exitCode = exitCode;
+          return _client.kv.getAsync({
+            key: 'service',
+            recurse: true
+          });
+        }).then(function(result) {
+          _response = result;
         });
-      })
-      .then(function() {
-        return execute('node ../consul-kv-sync.js ./one.json ./two.json');
-      }).then(function(exitCode) {
-        _exitCode = exitCode;
+      });
+
+      it('should set exit code to 0', function() {
+        expect(_exitCode).to.eql(0);
+      });
+
+      it('should set value to correct value', function() {
+        var item = _response.find(function(item) {
+          return item.Key == 'service/two';
+        });
+
+        expect(item).to.be.ok;
+        expect(item.Value).to.eql('value 2');
+      });
+
+      it('should set overridden value to correct value', function() {
+        var item = _response.find(function(item) {
+          return item.Key == 'service/one';
+        });
+
+        expect(item).to.be.ok;
+        expect(item.Value).to.eql('value from file two');
+      });
+
+      it('should set array parameters correctly', function() {
+        var items = _.filter(_response, function(item) {
+          return /^service\/arrayparam/.test(item.Key);
+        });
+
+        expect(items.length).to.eql(4);
+        expect(items[0].Key).to.eql('service/arrayparam/0');
+        expect(items[0].Value).to.eql('1');
+        expect(items[1].Value).to.eql('2');
+        expect(items[2].Value).to.eql('3');
+        expect(items[3].Value).to.eql('4');
+      });
+
+      it('should remove existing keys that are not in config file', function() {
+        var items = _.filter(_response, function(item) {
+          return item.Key == 'service/four';
+        });
+
+        expect(items.length).to.eql(0);
+      });
+
+      it('should not impact keys for a different service', function() {
         return _client.kv.getAsync({
-          key: 'service',
-          recurse: true
+          key: 'service2/item'
+        }).then(function(item) {
+          expect(item.Value).to.eql('this value should stay');
         });
-      }).then(function(result) {
-        _response = result;
       });
     });
-
-    it('should set exit code to 0', function() {
-      expect(_exitCode).to.eql(0);
-    });
-
-    it('should set value to correct value', function() {
-      var item = _response.find(function(item) {
-        return item.Key == 'service/two';
-      });
-
-      expect(item).to.be.ok;
-      expect(item.Value).to.eql('value 2');
-    });
-
-    it('should set overridden value to correct value', function() {
-      var item = _response.find(function(item) {
-        return item.Key == 'service/one';
-      });
-
-      expect(item).to.be.ok;
-      expect(item.Value).to.eql('value from file two');
-    });
-
-    it('should set array parameters correctly', function() {
-      var items = _.filter(_response, function(item) {
-        return /^service\/arrayparam/.test(item.Key);
-      });
-
-      expect(items.length).to.eql(4);
-      expect(items[0].Key).to.eql('service/arrayparam/0');
-      expect(items[0].Value).to.eql('1');
-      expect(items[1].Value).to.eql('2');
-      expect(items[2].Value).to.eql('3');
-      expect(items[3].Value).to.eql('4');
-    });
-
-    it('should remove existing keys that are not in config file', function() {
-      var items = _.filter(_response, function(item) {
-        return item.Key == 'service/four';
-      });
-
-      expect(items.length).to.eql(0);
-    });
-
-    it('should not impact keys for a different service', function() {
-      return _client.kv.getAsync({
-        key: 'service2/item'
-      }).then(function(item) {
-        expect(item.Value).to.eql('this value should stay');
-      });
-    });
-
   });
 });

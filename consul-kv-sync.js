@@ -100,8 +100,12 @@ Promise.all(_.map(program.ca, readFile)).then(function(certificates) {
   debug(results);
   _existing = results;
 }).catch(function(err) {
-  error(err);
-  process.exit(99);
+  if (err.message === 'not found') {
+    debug('No existing keys found');
+  } else {
+    error(err);
+    process.exit(99);
+  }
 }).then(function() {
   _reduced = _.reduce(_.filter(_flattened, function(x) {
     return _.isString(x.value) || _.isFinite(x.value);
