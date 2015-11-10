@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+/*eslint no-console: 0*/
+
 var fs = require('fs');
 var Promise = require('bluebird');
 var program = require('commander');
@@ -13,7 +15,7 @@ var pkg = require('./package.json');
 var readFile = Promise.promisify(fs.readFile);
 
 function readFragments(fileName) {
-  return readFile(fileName, "utf8").then(function(contents){
+  return readFile(fileName, 'utf8').then(function(contents){
     return jptr.list(JSON.parse(contents));
   });
 }
@@ -21,42 +23,45 @@ function readFragments(fileName) {
 request.defaults({json:true});
 
 program.version(pkg.version)
-  .description("Synchronizes one or more JSON manifests with consul's key value store")
-  .option('-H, --host <host>', "Consul API url, default: http://consul.service.consul:8500");
+  .description('Synchronizes one or more JSON manifests with consul\'s key value store')
+  .option('-H, --host <host>', 'Consul API url, default: http://consul.service.consul:8500');
 
 program.parse(process.argv);
 
 var host = program.host || process.env.CONSUL_HOST || 'http://consul.service.consul:8500/';
+host = _.trimRight(host, '/');
 
 Promise.all(_.map(program.args, readFragments)).then(function (files){
   var flattened = _.flatten(files);
   var prefix = flattened[1].fragmentId.substring(2);
-  var reduced = _.reduce(_.filter(flattened, function(x){ return _.isString(x.value) || _.isFinite(x.value)}), function(acc, item){
+  var reduced = _.reduce(_.filter(flattened, function(x){ return _.isString(x.value) || _.isFinite(x.value); }), function(acc, item){
     acc[item.fragmentId.substring(2)] = item.value;
     return acc;
   }, {});
 
   var existing = {};
-  request.get(host + 'v1/kv/' + prefix + '?recurse=1', {json: true})
+  request.get(host + '/v1/kv/' + prefix + '?recurse=1', {json: true})
     .then(function (res) {
       _.each(res, function(item){
         existing[item.Key] = base64.decode(item.Value);
-      })
+      });
       if (res.statusCode == 200) {
         existing = res.body;
       }
       return;
     }).catch(function(err){
-      console.log(err);
-      //ignore errors, jus
+      if (err.statusCode != '404') {
+        console.log('Encountered error connecting to consul - ' + err.message);
+        process.exit(1);
+      }
     }).then(function(){
       return Promise.all(_.map(reduced, function(value, key){
         delete existing[key];
-        return request.put(host + 'v1/kv/' + key, {body:''+value});
+        return request.put(host + '/v1/kv/' + key, {body:''+value});
       }));
     }).then(function(){
       return Promise.all(_.map(existing, function(value, key){
-        return request(host + 'v1/kv/' + key, {method:'DELETE'});
+        return request(host + '/v1/kv/' + key, {method:'DELETE'});
       }));
     }).then(function(){
       console.log(reduced);
