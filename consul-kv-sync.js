@@ -24,11 +24,11 @@ function readFragments(fileName) {
     }
     var pointers = jptr.list(contents);
     if (firstFragmentId) {
-      if (pointers[0].fragmentId != firstFragmentId) {
-        return Promise.reject(new Error('Each file must have the same top-level node. Expected "' + fileName + '" to have "' + firstFragmentId + '", but it has "' + pointers[0].fragmentId + '".'));
+      if (pointers[1].fragmentId != firstFragmentId) {
+        return Promise.reject(new Error('Each file must have the same top-level node. Expected "' + fileName + '" to have top-level node "' + firstFragmentId.substring(2) + '", but it has "' + pointers[1].fragmentId.substring(2) + '".'));
       }
     } else {
-      firstFragmentId = pointers[0].fragmentId;
+      firstFragmentId = pointers[1].fragmentId;
     }
     return Promise.resolve(pointers);
   });
@@ -101,7 +101,7 @@ Promise.all(_.map(program.ca, readFile)).then(function(certificates) {
   _existing = results;
 }).catch(function(err) {
   error(err);
-  process.exit(1);
+  process.exit(99);
 }).then(function() {
   _reduced = _.reduce(_.filter(_flattened, function(x) {
     return _.isString(x.value) || _.isFinite(x.value);
