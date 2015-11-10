@@ -80,7 +80,7 @@ Promise.all(_.map(program.ca, readFile)).then(function(certificates) {
   var config = {
     host: program.host || process.env.CONSUL_HOST || 'consul.service.consul',
     port: program.port || process.env.CONSUL_PORT || 8500,
-    secure: !!program.secure,
+    secure: program.secure || process.env.CONSUL_SECURE === 'true',
     ca: certificates
   };
   debug('Config:');
