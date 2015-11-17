@@ -20,12 +20,12 @@ function readFragments(fileName) {
     debug(contents);
     var keys = _.keys(contents);
     if (keys.length !== 1) {
-      return Promise.reject(new Error('Each configuration file must have a single top-level node identifying the service. "' + fileName + '" has ' + keys.length + ' top-level nodes.'));
+      throw new Error('Each configuration file must have a single top-level node identifying the service. "' + fileName + '" has ' + keys.length + ' top-level nodes.');
     }
     var pointers = jptr.list(contents);
     if (firstFragmentId) {
       if (pointers[1].fragmentId != firstFragmentId) {
-        return Promise.reject(new Error('Each file must have the same top-level node. Expected "' + fileName + '" to have top-level node "' + firstFragmentId.substring(2) + '", but it has "' + pointers[1].fragmentId.substring(2) + '".'));
+        throw new Error('Each file must have the same top-level node. Expected "' + fileName + '" to have top-level node "' + firstFragmentId.substring(2) + '", but it has "' + pointers[1].fragmentId.substring(2) + '".');
       }
     } else {
       firstFragmentId = pointers[1].fragmentId;
