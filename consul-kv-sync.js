@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+'use strict';
+
 /*eslint no-console: 0*/
 
 var fs = require('fs');
@@ -12,31 +14,7 @@ var consul = require('consul');
 var pkg = require('./package.json');
 
 var readFile = Promise.promisify(fs.readFile);
-var firstFragmentId;
-
-function readFragments(fileName) {
-  return readFile(fileName, 'utf8').then(JSON.parse).then(function validateContents(contents) {
-    debug('Read ' + fileName);
-    debug(contents);
-    var keys = _.keys(contents);
-    if (keys.length !== 1) {
-      return Promise.reject(new Error('Each configuration file must have a single top-level node identifying the service. "' + fileName + '" has ' + keys.length + ' top-level nodes.'));
-    }
-    var pointers = jptr.list(contents);
-    if (firstFragmentId) {
-      if (pointers[1].pointer != firstFragmentId) {
-        return Promise.reject(new Error('Each file must have the same top-level node. Expected "' + fileName + '" to have top-level node "' + firstFragmentId.substring(1) + '", but it has "' + pointers[1].pointer.substring(1) + '".'));
-      }
-    } else {
-      firstFragmentId = pointers[1].pointer;
-    }
-    return Promise.resolve(pointers);
-  });
-}
-
-function collectCA(value, items) {
-  items.push(value);
-}
+var firstFragmentId, client, flattened, reduced, deleteCount = 0, putCount = 0, existing = {};
 
 function info(message) {
   console.log(message);
@@ -48,6 +26,32 @@ function debug(message) {
   if (program.verbose) {
     console.log(message);
   }
+}
+
+function readFragments(fileName) {
+  return readFile(fileName, 'utf8').then(JSON.parse).then(function validateContents(contents) {
+    var pointers, keys;
+    debug('Read ' + fileName);
+    debug(contents);
+    keys = _.keys(contents);
+    if (keys.length !== 1) {
+      return Promise.reject(new Error('Each configuration file must have a single top-level node identifying the service. "' + fileName + '" has ' + keys.length + ' top-level nodes.'));
+    }
+    pointers = jptr.list(contents);
+    if (firstFragmentId) {
+      if (pointers[1].pointer !== firstFragmentId) {
+        return Promise.reject(new Error('Each file must have the same top-level node. Expected "' + fileName + '" to have top-level node "' + firstFragmentId.substring(1) + '", but it has "' + pointers[1].pointer.substring(1) + '".'));
+      }
+    } else {
+      firstFragmentId = pointers[1].pointer;
+    }
+    console.log('here')
+    return Promise.resolve(pointers);
+  });
+}
+
+function collectCA(value, items) {
+  items.push(value);
 }
 
 program.version(pkg.version)
@@ -75,7 +79,6 @@ if (!program.args.length) {
   process.exit(1);
 }
 
-var _client, _flattened, _reduced, _deleteCount = 0, _putCount = 0, _existing = {};
 Promise.all(_.map(program.ca, readFile)).then(function(certificates) {
   var config = {
     host: program.host || process.env.CONSUL_HOST || 'consul.service.consul',
@@ -85,20 +88,21 @@ Promise.all(_.map(program.ca, readFile)).then(function(certificates) {
   };
   debug('Config:');
   debug(config);
-  _client = consul(config);
-  Promise.promisifyAll(_client.kv);
+  client = consul(config);
+  Promise.promisifyAll(client.kv);
 
   return Promise.all(_.map(program.args, readFragments));
 }).then(function(files) {
-  _flattened = _.flatten(files);
-  var prefix = _flattened[1].pointer.substring(1) + '/';
+  var prefix;
+  flattened = _.flatten(files);
+  prefix = flattened[1].pointer.substring(1) + '/';
 
   debug('Getting keys for ' + prefix);
-  return _client.kv.keysAsync(prefix);
+  return client.kv.keysAsync(prefix);
 }).then(function(results) {
   debug('Keys:');
   debug(results);
-  _existing = results;
+  existing = results;
 }).catch(function(err) {
   if (err.message === 'not found') {
     debug('No existing keys found');
@@ -107,30 +111,30 @@ Promise.all(_.map(program.ca, readFile)).then(function(certificates) {
     process.exit(99);
   }
 }).then(function() {
-  _reduced = _.reduce(_.filter(_flattened, function(x) {
+  reduced = _.reduce(_.filter(flattened, function(x) {
     return _.isString(x.value) || _.isFinite(x.value);
   }), function(acc, item) {
     acc[item.pointer.substring(1)] = item.value;
     return acc;
   }, {});
-  return Promise.all(_.map(_reduced, function(value, key) {
-    _putCount++;
-    _existing = _.filter(_existing, function(item) {
+  return Promise.all(_.map(reduced, function(value, key) {
+    putCount++;
+    existing = _.filter(existing, function(item) {
       return item !== key;
     });
     debug('Setting "' + key + '" to "' + value + '"');
-    return _client.kv.setAsync({
+    return client.kv.setAsync({
       key: key,
       value: ''+value
     });
   }));
 }).then(function() {
-  return Promise.all(_.map(_existing, function(key) {
-    _deleteCount++;
-    return _client.kv.delAsync(key);
+  return Promise.all(_.map(existing, function(key) {
+    deleteCount++;
+    return client.kv.delAsync(key);
   }));
 }).then(function() {
-  info('Sync completed. ' + _putCount + ' items set, ' + _deleteCount + ' items deleted.');
+  info('Sync completed. ' + putCount + ' items set, ' + deleteCount + ' items deleted.');
   info('Config:');
-  info(_reduced);
+  info(reduced);
 });

@@ -41,6 +41,7 @@
   "devDependencies": {
     "chai": "^3.4.1",
     "eslint": "^1.10.3",
+    "eslint-config-leisurelink": "^1.0.1",
     "eslint-watch": "^2.1.4",
     "mocha": "^2.3.4",
     "onchange": "^2.0.0"
