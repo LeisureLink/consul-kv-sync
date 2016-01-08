@@ -20,15 +20,15 @@ function readFragments(fileName) {
     debug(contents);
     var keys = _.keys(contents);
     if (keys.length !== 1) {
-      throw new Error('Each configuration file must have a single top-level node identifying the service. "' + fileName + '" has ' + keys.length + ' top-level nodes.');
+      return Promise.reject(new Error('Each configuration file must have a single top-level node identifying the service. "' + fileName + '" has ' + keys.length + ' top-level nodes.'));
     }
     var pointers = jptr.list(contents);
     if (firstFragmentId) {
-      if (pointers[1].fragmentId != firstFragmentId) {
-        throw new Error('Each file must have the same top-level node. Expected "' + fileName + '" to have top-level node "' + firstFragmentId.substring(2) + '", but it has "' + pointers[1].fragmentId.substring(2) + '".');
+      if (pointers[1].pointer != firstFragmentId) {
+        return Promise.reject(new Error('Each file must have the same top-level node. Expected "' + fileName + '" to have top-level node "' + firstFragmentId.substring(1) + '", but it has "' + pointers[1].pointer.substring(1) + '".'));
       }
     } else {
-      firstFragmentId = pointers[1].fragmentId;
+      firstFragmentId = pointers[1].pointer;
     }
     return Promise.resolve(pointers);
   });
@@ -91,7 +91,7 @@ Promise.all(_.map(program.ca, readFile)).then(function(certificates) {
   return Promise.all(_.map(program.args, readFragments));
 }).then(function(files) {
   _flattened = _.flatten(files);
-  var prefix = _flattened[1].fragmentId.substring(2) + '/';
+  var prefix = _flattened[1].pointer.substring(1) + '/';
 
   debug('Getting keys for ' + prefix);
   return _client.kv.keysAsync(prefix);
@@ -110,7 +110,7 @@ Promise.all(_.map(program.ca, readFile)).then(function(certificates) {
   _reduced = _.reduce(_.filter(_flattened, function(x) {
     return _.isString(x.value) || _.isFinite(x.value);
   }), function(acc, item) {
-    acc[item.fragmentId.substring(2)] = item.value;
+    acc[item.pointer.substring(1)] = item.value;
     return acc;
   }, {});
   return Promise.all(_.map(_reduced, function(value, key) {
