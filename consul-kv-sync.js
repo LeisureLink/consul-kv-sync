@@ -45,7 +45,6 @@ function readFragments(fileName) {
     } else {
       firstFragmentId = pointers[1].pointer;
     }
-    console.log('here')
     return Promise.resolve(pointers);
   });
 }
