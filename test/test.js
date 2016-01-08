@@ -1,15 +1,16 @@
 'use strict';
 
-var exec = require('child_process').exec;
-var expect = require('chai').expect;
-var _ = require('lodash');
-var Promise = require('bluebird');
-var consul = require('consul');
+const exec = require('child_process').exec;
+const expect = require('chai').expect;
+const _ = require('lodash');
+const Promise = require('bluebird');
+const consul = require('consul');
 
 function execute(commandLine) {
   return new Promise(function(resolve, reject) {
     exec(commandLine, {
-      cwd: __dirname
+      cwd: __dirname,
+      env: process.env
     }, function(err, stdout, stderr) {
       if (err) {
         reject(err);
