@@ -1,94 +1,110 @@
 'use strict';
 
-var exec = require('child_process').exec;
-var expect = require('chai').expect;
-var _ = require('lodash');
-var Promise = require('bluebird');
-var consul = require('consul');
+const exec = require('child_process').exec;
+const expect = require('chai').expect;
+const _ = require('lodash');
+const Promise = require('bluebird');
+const consul = require('consul');
 
-function execute(commandLine) {
-  return new Promise(function(resolve, reject) {
+const execute = (commandLine) => {
+  return new Promise((resolve, reject) => {
     exec(commandLine, {
-      cwd: __dirname
-    }, function(err, stdout, stderr) {
+      cwd: __dirname,
+      env: process.env
+    }, (err, stdout, stderr) => {
       if (err) {
         reject(err);
       } else {
-        resolve({ stdout: stdout, stderr: stderr });
+        resolve({
+          stdout: stdout,
+          stderr: stderr
+        });
       }
     });
   });
-}
+};
 
-describe('consul-kv-sync', function() {
-  var config = {
+describe('consul-kv-sync', () => {
+  const config = {
     host: process.env.CONSUL_HOST || 'consul.service.consul',
     port: process.env.CONSUL_PORT || '8500',
     secure: process.env.CONSUL_SECURE === 'true'
   };
 
-  var client = consul(config);
+  const client = consul(config);
   Promise.promisifyAll(client.kv);
 
-  after(function(){
-    return client.kv.delAsync({ key:'service', recurse:true })
-      .then(function(){
-        return client.kv.delAsync({ key:'service2', recurse:true });
-      })
-      .then(function(){
-        return client.kv.delAsync({ key:'other_service', recurse:true });
+  after(() => {
+    return client.kv.delAsync({
+      key: 'service',
+      recurse: true
+    })
+    .then(() => {
+      return client.kv.delAsync({
+        key: 'service2',
+        recurse: true
       });
+    })
+    .then(() => {
+      return client.kv.delAsync({
+        key: 'other_service',
+        recurse: true
+      });
+    });
   });
 
-  describe('#validation', function() {
-    it('should return an error when an empty config file is added', function() {
+  describe('#validation', () => {
+    it('should return an error when an empty config file is added', () => {
       return execute('node ../consul-kv-sync.js ./one.json ./two.json ./empty.json')
-        .then(function(){
+        .then(() => {
           throw new Error('Expected failure, got success');
         })
-        .catch(function(err) {
+        .catch((err) => {
           expect(err.code).to.eql(99);
         });
     });
-    it('should return an error when a config file with multiple top-level nodes is added', function() {
+    it('should return an error when a config file with multiple top-level nodes is added', () => {
       return execute('node ../consul-kv-sync.js ./one.json ./two.json ./full.json')
-        .then(function(){
+        .then(() => {
           throw new Error('Expected failure, got success');
         })
-        .catch(function(err) {
+        .catch((err) => {
           expect(err.code).to.eql(99);
         });
     });
-    it('should return an error when an different service\'s config file is added', function() {
+    it('should return an error when an different service\'s config file is added', () => {
       return execute('node ../consul-kv-sync.js ./one.json ./two.json ./other.json')
-        .then(function(){
+        .then(() => {
           throw new Error('Expected failure, got success');
         })
-        .catch(function(err) {
+        .catch((err) => {
           expect(err.code).to.eql(99);
         });
     });
   });
 
-  describe('#run', function() {
-    var response;
-    describe('first run scenario', function(){
-      before(function(){
-        return client.kv.delAsync({ key:'service', recurse:true })
-          .then(function(){
-            return execute('node ../consul-kv-sync.js ./one.json ./two.json');
-          }).then(function(){
-            return client.kv.getAsync({
-              key: 'service',
-              recurse: true
-            });
-          }).then(function(res){
-            response = res;
+  describe('#run', () => {
+    let response;
+    describe('first run scenario', () => {
+      before(() => {
+        return client.kv.delAsync({
+          key: 'service',
+          recurse: true
+        })
+        .then(() => {
+          return execute('node ../consul-kv-sync.js ./one.json ./two.json');
+        }).then(() => {
+          return client.kv.getAsync({
+            key: 'service',
+            recurse: true
           });
+        }).then((res) => {
+          response = res;
+        });
       });
 
-      it('should set value to correct value', function() {
-        var item = response.find(function(item) {
+      it('should set value to correct value', () => {
+        let item = response.find((item) => {
           return item.Key === 'service/two';
         });
 
@@ -96,8 +112,8 @@ describe('consul-kv-sync', function() {
         expect(item.Value).to.eql('value 2');
       });
 
-      it('should set overridden value to correct value', function() {
-        var item = response.find(function(item) {
+      it('should set overridden value to correct value', () => {
+        let item = response.find((item) => {
           return item.Key === 'service/one';
         });
 
@@ -105,8 +121,8 @@ describe('consul-kv-sync', function() {
         expect(item.Value).to.eql('value from file two');
       });
 
-      it('should set array parameters correctly', function() {
-        var items = _.filter(response, function(item) {
+      it('should set array parameters correctly', () => {
+        let items = _.filter(response, (item) => {
           return /^service\/arrayparam/.test(item.Key);
         });
 
@@ -119,24 +135,24 @@ describe('consul-kv-sync', function() {
       });
     });
 
-    describe('second run scenario', function(){
-      before(function() {
+    describe('second run scenario', () => {
+      before(() => {
         return client.kv.setAsync({
           key: 'service/four',
           value: 'value for removal'
-        }).then(function() {
+        }).then(() => {
           return client.kv.setAsync({
             key: 'service2/item',
             value: 'this value should stay'
           });
-        }).then(function() {
+        }).then(() => {
           return client.kv.setAsync({
             key: 'service/one',
             value: 'this value should be changed'
           });
-        }).then(function() {
+        }).then(() => {
           return execute('node ../consul-kv-sync.js ./one.json ./two.json');
-        }).then(function() {
+        }).then(() => {
           return client.kv.getAsync({
             key: 'service',
             recurse: true
@@ -146,8 +162,8 @@ describe('consul-kv-sync', function() {
         });
       });
 
-      it('should set value to correct value', function() {
-        var item = response.find(function(item) {
+      it('should set value to correct value', () => {
+        let item = response.find((item) => {
           return item.Key === 'service/two';
         });
 
@@ -155,8 +171,8 @@ describe('consul-kv-sync', function() {
         expect(item.Value).to.eql('value 2');
       });
 
-      it('should set overridden value to correct value', function() {
-        var item = response.find(function(item) {
+      it('should set overridden value to correct value', () => {
+        let item = response.find((item) => {
           return item.Key === 'service/one';
         });
 
@@ -164,8 +180,8 @@ describe('consul-kv-sync', function() {
         expect(item.Value).to.eql('value from file two');
       });
 
-      it('should set array parameters correctly', function() {
-        var items = _.filter(response, function(item) {
+      it('should set array parameters correctly', () => {
+        let items = _.filter(response, (item) => {
           return /^service\/arrayparam/.test(item.Key);
         });
 
@@ -177,18 +193,18 @@ describe('consul-kv-sync', function() {
         expect(items[3].Value).to.eql('4');
       });
 
-      it('should remove existing keys that are not in config file', function() {
-        var items = _.filter(response, function(item) {
+      it('should remove existing keys that are not in config file', () => {
+        let items = _.filter(response, (item) => {
           return item.Key === 'service/four';
         });
 
         expect(items.length).to.eql(0);
       });
 
-      it('should not impact keys for a different service', function() {
+      it('should not impact keys for a different service', () => {
         return client.kv.getAsync({
           key: 'service2/item'
-        }).then(function(item) {
+        }).then((item) => {
           expect(item.Value).to.eql('this value should stay');
         });
       });

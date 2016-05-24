@@ -1,53 +1,11 @@
 #!/usr/bin/env node
-
 'use strict';
 
-/*eslint no-console: 0*/
-
-var fs = require('fs');
-var Promise = require('bluebird');
-var program = require('commander');
-var jptr = require('json-ptr');
-var _ = require('lodash');
-var consul = require('consul');
-
-var pkg = require('./package.json');
-
-var readFile = Promise.promisify(fs.readFile);
-var firstFragmentId, client, flattened, reduced, deleteCount = 0, putCount = 0, existing = {};
-
-function info(message) {
-  console.log(message);
-}
-function error(message) {
-  console.log(message);
-}
-function debug(message) {
-  if (program.verbose) {
-    console.log(message);
-  }
-}
-
-function readFragments(fileName) {
-  return readFile(fileName, 'utf8').then(JSON.parse).then(function validateContents(contents) {
-    var pointers, keys;
-    debug('Read ' + fileName);
-    debug(contents);
-    keys = _.keys(contents);
-    if (keys.length !== 1) {
-      return Promise.reject(new Error('Each configuration file must have a single top-level node identifying the service. "' + fileName + '" has ' + keys.length + ' top-level nodes.'));
-    }
-    pointers = jptr.list(contents);
-    if (firstFragmentId) {
-      if (pointers[1].pointer !== firstFragmentId) {
-        return Promise.reject(new Error('Each file must have the same top-level node. Expected "' + fileName + '" to have top-level node "' + firstFragmentId.substring(1) + '", but it has "' + pointers[1].pointer.substring(1) + '".'));
-      }
-    } else {
-      firstFragmentId = pointers[1].pointer;
-    }
-    return Promise.resolve(pointers);
-  });
-}
+const program = require('commander');
+const pkg = require('./package');
+const log = require('./lib/logger');
+const clientFactory = require('./lib/client');
+const workflowFactory = require('./lib/workflow');
 
 function collectCA(value, items) {
   items.push(value);
@@ -77,63 +35,22 @@ if (!program.args.length) {
   program.outputHelp();
   process.exit(1);
 }
+if (program.verbose) {
+  log.transports.console.level = 'debug';
+}
 
-Promise.all(_.map(program.ca, readFile)).then(function(certificates) {
-  var config = {
-    host: program.host || process.env.CONSUL_HOST || 'consul.service.consul',
-    port: program.port || process.env.CONSUL_PORT || 8500,
-    secure: program.secure || process.env.CONSUL_SECURE === 'true',
-    ca: certificates
-  };
-  debug('Config:');
-  debug(config);
-  client = consul(config);
-  Promise.promisifyAll(client.kv);
-
-  return Promise.all(_.map(program.args, readFragments));
-}).then(function(files) {
-  var prefix;
-  flattened = _.flatten(files);
-  prefix = flattened[1].pointer.substring(1) + '/';
-
-  debug('Getting keys for ' + prefix);
-  return client.kv.keysAsync(prefix);
-}).then(function(results) {
-  debug('Keys:');
-  debug(results);
-  existing = results;
-}).catch(function(err) {
-  if (err.message === 'not found') {
-    debug('No existing keys found');
+let client = clientFactory(program);
+let workflow = workflowFactory(client, program.args);
+workflow.exec().then(() => {
+  log.info('Sync completed. ' + workflow.stats.put + ' items set, ' + workflow.stats.deleted + ' items deleted.');
+  log.info('Config:');
+  log.info(workflow.config);
+})
+.catch((err) => {
+  if (program.verbose) {
+    log.error(err);
   } else {
-    error(err);
-    process.exit(99);
+    log.error(err.message);
   }
-}).then(function() {
-  reduced = _.reduce(_.filter(flattened, function(x) {
-    return _.isString(x.value) || _.isFinite(x.value);
-  }), function(acc, item) {
-    acc[item.pointer.substring(1)] = item.value;
-    return acc;
-  }, {});
-  return Promise.all(_.map(reduced, function(value, key) {
-    putCount++;
-    existing = _.filter(existing, function(item) {
-      return item !== key;
-    });
-    debug('Setting "' + key + '" to "' + value + '"');
-    return client.kv.setAsync({
-      key: key,
-      value: ''+value
-    });
-  }));
-}).then(function() {
-  return Promise.all(_.map(existing, function(key) {
-    deleteCount++;
-    return client.kv.delAsync(key);
-  }));
-}).then(function() {
-  info('Sync completed. ' + putCount + ' items set, ' + deleteCount + ' items deleted.');
-  info('Config:');
-  info(reduced);
+  process.exit(99);
 });
